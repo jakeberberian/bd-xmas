@@ -58,6 +58,13 @@ alter table claims enable row level security;
 alter table comments enable row level security;
 alter table reactions enable row level security;
 
+-- Let the server (secret key, role service_role) use the tables.
+grant usage on schema public to service_role;
+grant all on all tables in schema public to service_role;
+grant all on all sequences in schema public to service_role;
+alter default privileges in schema public grant all on tables to service_role;
+alter default privileges in schema public grant all on sequences to service_role;
+
 -- Starting data, imported from the Google Sheet.
 insert into people (name, created_at) values
   ($q$Mom$q$, now() + interval '0 seconds'),
