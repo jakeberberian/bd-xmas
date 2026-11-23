@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Berberian-Downs Gift Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: one phone-width column, stacked cards, sticky bottom tabs. Evergreen accent on a quiet neutral ground. */
+:root {
+  --bg: #F5F3EE;
+  --card: #FFFFFF;
+  --ink: #1B1F1D;
+  --muted: #5B635F;
+  --line: #DAD6CC;
+  --accent: #1D5A46;
+  --accent-text: #1D5A46;
+  --on-accent: #FFFFFF;
+  --tint: #E3EFE9;
+  --chip: #E8E4DA;
+  --danger: #8A2431;
+  --danger-tint: #F8E4E1;
+  --shadow: 0 1px 2px rgba(27,31,29,.06);
+  --display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131916; --card: #1C2420; --ink: #ECEFEA; --muted: #A3ADA6; --line: #33403A;
+    --accent: #2E7D63; --accent-text: #7DD3B0; --on-accent: #FFFFFF; --tint: #1F3A30; --chip: #2A332E;
+    --danger: #F08A94; --danger-tint: #3A1F23; --shadow: none; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131916; --card: #1C2420; --ink: #ECEFEA; --muted: #A3ADA6; --line: #33403A;
+  --accent: #2E7D63; --accent-text: #7DD3B0; --on-accent: #FFFFFF; --tint: #1F3A30; --chip: #2A332E;
+  --danger: #F08A94; --danger-tint: #3A1F23; --shadow: none; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.4; }
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: var(--accent-text); }
+:focus-visible { outline: 3px solid var(--accent-text); outline-offset: 2px; }
+#app { max-width: 460px; min-height: 100vh; margin: 0 auto; display: flex; flex-direction: column; background: var(--bg); position: relative; }
+@media (min-width: 520px) { #app { border-left: 1px solid var(--line); border-right: 1px solid var(--line); } }
+.content { flex: 1; display: flex; flex-direction: column; gap: 14px; padding: 20px 16px 24px; }
+h1, h2 { margin: 0; font-family: var(--display); font-weight: 700; text-wrap: balance; }
+h1 { font-size: 28px; line-height: 1.1; }
+h2 { font-size: 18px; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; position: relative; }
+.me-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 4px 0 12px; border: 1px solid var(--line); border-radius: 22px; background: var(--card); font-size: 14px; font-weight: 500; }
+.avatar { width: 32px; height: 32px; border-radius: 16px; background: var(--chip); display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; flex: 0 0 auto; }
+.avatar.on { background: var(--accent); color: var(--on-accent); }
+.menu { position: absolute; right: 0; top: 52px; z-index: 5; width: 250px; padding: 6px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); box-shadow: 0 8px 24px rgba(0,0,0,.18); display: flex; flex-direction: column; }
+.menu button { min-height: 44px; padding: 0 12px; border: none; background: none; text-align: left; border-radius: 10px; font-size: 15px; }
+.menu button:hover { background: var(--chip); }
+.menu .foot { padding: 8px 12px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); margin-top: 4px; }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 4px; }
+.chip { flex: 0 0 auto; min-height: 44px; padding: 0 16px; border: 1px solid var(--line); border-radius: 22px; background: var(--card); font-size: 15px; font-weight: 500; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.card { display: flex; flex-direction: column; gap: 6px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); box-shadow: var(--shadow); }
+.card .title { padding: 0; border: none; background: none; text-align: left; font-size: 16px; font-weight: 600; line-height: 1.25; }
+.specs, .notes { font-size: 14px; white-space: pre-line; }
+.specs { color: var(--ink); }
+.notes { color: var(--muted); }
+.price { font-size: 14px; font-weight: 600; }
+.links { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 14px; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; border-radius: 16px; background: var(--chip); font-size: 14px; font-weight: 600; }
+.pill.mine { background: var(--accent); color: var(--on-accent); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 22px; border: 1.5px solid var(--accent-text); background: var(--card); color: var(--accent-text); font-size: 14px; font-weight: 600; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.block { width: 100%; min-height: 52px; border-radius: 14px; font-size: 16px; }
+.btn.quiet { border-color: transparent; background: none; color: var(--muted); font-weight: 500; padding: 0 8px; }
+.btn.danger { border-color: transparent; background: none; color: var(--danger); }
+.cbtn { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 8px; border: none; background: none; font-size: 14px; color: var(--muted); }
+.also { font-size: 13px; color: var(--muted); }
+.banner { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 14px; background: var(--tint); color: var(--ink); font-size: 14px; }
+.banner svg { flex: 0 0 auto; margin-top: 1px; color: var(--accent-text); }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label, .lbl { font-size: 14px; font-weight: 600; }
+.input { width: 100%; min-height: 48px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); font-size: 16px; }
+textarea.input { resize: vertical; line-height: 1.4; }
+.err { padding: 10px 12px; border-radius: 10px; background: var(--danger-tint); color: var(--danger); font-size: 14px; font-weight: 500; }
+.names { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.name-btn { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); font-size: 16px; font-weight: 500; text-align: left; }
+.name-btn[aria-pressed="true"] { border: 2px solid var(--accent); background: var(--tint); font-weight: 600; }
+.nav { position: sticky; bottom: 0; display: flex; border-top: 1px solid var(--line); background: var(--card); padding: 6px 12px calc(10px + env(safe-area-inset-bottom)); }
+.nav button { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 52px; border: none; background: none; font-size: 13px; font-weight: 500; color: var(--muted); }
+.nav button[aria-current="page"] { color: var(--accent-text); font-weight: 600; }
+.seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.seg button { min-height: 44px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); font-size: 13px; font-weight: 500; line-height: 1.2; }
+.seg button[aria-pressed="true"] { border: 2px solid var(--accent); background: var(--tint); font-weight: 600; }
+.panel { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); }
+.who { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 15px; }
+.comment { display: flex; flex-direction: column; gap: 4px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
+.comment .meta { font-size: 13px; font-weight: 600; }
+.comment .meta span { font-weight: 400; color: var(--muted); }
+.comment p { margin: 0; font-size: 15px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reacts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.react { min-width: 44px; min-height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); font-size: 14px; }
+.react[aria-pressed="true"] { border-color: var(--accent); background: var(--tint); font-weight: 600; }
+.linkrow { display: grid; grid-template-columns: 1fr 1.6fr auto; gap: 6px; align-items: center; }
+.linkrow .input { min-height: 44px; padding: 8px 10px; font-size: 14px; }
+.back { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0; border: none; background: none; font-size: 15px; font-weight: 500; color: var(--accent-text); }
+.hero { display: flex; flex-direction: column; gap: 8px; }
+.eyebrow { font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.spacer { flex: 1; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+'use strict';
+
+var EMOJI = ['👍', '❤️', '😂', '🎁'];
+var MODES = [
+  { id: 'one', short: 'One person only', long: 'One person only' },
+  { id: 'several', short: 'Several can', long: 'Several people can each get one' },
+  { id: 'group', short: 'Group gift', long: 'Group gift (going in together)' }
+];
+
+var ui = { view: 'signin', selName: null, err: '', person: null, itemId: null, form: null, menu: false, adding: false, confirmRemove: false };
+var state = { me: null, people: [], items: [] };
+var busy = false;
+
+/* ---------- icons ---------- */
+var ICON = {
+  check: '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3L13 4.5"/></svg>',
+  user: '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.6-2.4 2.5-3.5 5-3.5s4.4 1.1 5 3.5"/></svg>',
+  msg: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3 4h14v9H9l-4 3v-3H3z"/></svg>',
+  lock: '<svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2"/></svg>',
+  plus: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>',
+  back: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3.5L5.5 9l5.5 5.5"/></svg>',
+  gift: '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="16" height="10" rx="1.5"/><path d="M2 6h18v3H2zM11 6v13M11 6c-1-3-5-3.5-5-1.5S9 6 11 6zm0 0c1-3 5-3.5 5-1.5S13 6 11 6z"/></svg>',
+  list: '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h12v14H5zM8 8.5h6M8 12h6M8 15.5h3"/></svg>',
+  eyeoff: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z"/><circle cx="10" cy="10" r="2.5"/><path d="M3 17L17 3"/></svg>'
+};
+
+/* ---------- helpers ---------- */
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function safeUrl(u) {
+  u = String(u || '').trim();
+  if (!u) return '';
+  if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+  try { var x = new URL(u); return (x.protocol === 'http:' || x.protocol === 'https:') ? x.href : ''; } catch (e) { return ''; }
+}
+function getItem(id) { for (var i = 0; i < state.items.length; i++) if (state.items[i].id === id) return state.items[i]; return null; }
+function getPerson(name) { for (var i = 0; i < state.people.length; i++) if (state.people[i].name === name) return state.people[i]; return null; }
+function fmtTime(iso) {
+  try { return new Date(iso).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; }
+}
+function initial(n) { return esc(String(n).charAt(0).toUpperCase()); }
+function canClaim(it) {
+  var me = state.me;
+  if (it.owner === me || it.removed || it.claims.indexOf(me) > -1) return false;
+  return it.mode === 'one' ? it.claims.length === 0 : true;
+}
+function modeName(id) { for (var i = 0; i < MODES.length; i++) if (MODES[i].id === id) return MODES[i]; return MODES[0]; }
+
+/* ---------- views ---------- */
+function errBanner() { return ui.err ? '<div class="err" role="alert">' + esc(ui.err) + '</div>' : ''; }
+function topbar(title) {
+  var me = state.me;
+  var menu = '';
+  if (ui.menu) {
+    menu = '<div class="menu" role="menu">' +
+      '<button type="button" role="menuitem" data-a="switch">Switch person</button>' +
+      '<div class="foot">Signed in as ' + esc(me) + '. Switch person signs you out on this device.</div></div>';
+  }
+  return '<div class="topbar"><h1>' + esc(title) + '</h1>' +
+    '<button type="button" class="me-btn" data-a="menu" aria-haspopup="menu" aria-expanded="' + (ui.menu ? 'true' : 'false') + '">' + esc(me) +
+    '<span class="avatar on">' + initial(me) + '</span></button>' + menu + '</div>';
+}
+function nav(active) {
+  return '<nav class="nav" aria-label="Main">' +
+    '<button type="button" data-a="tab" data-v="lists"' + (active === 'lists' ? ' aria-current="page"' : '') + '>' + ICON.gift + 'Gift lists</button>' +
+    '<button type="button" data-a="tab" data-v="mylist"' + (active === 'mylist' ? ' aria-current="page"' : '') + '>' + ICON.list + 'My list</button></nav>';
+}
+function linksHTML(it) {
+  if (!it.links.length) return '';
+  return '<div class="links">' + it.links.map(function (l) {
+    return '<a href="' + esc(l.url) + '" target="_blank" rel="noopener noreferrer">' + esc(l.label || 'Link') + '</a>';
+  }).join('') + '</div>';
+}
+function detailsHTML(it) {
+  return (it.specs ? '<div class="specs">' + esc(it.specs) + '</div>' : '') +
+    (it.price ? '<div class="price">' + esc(it.price) + '</div>' : '') +
+    (it.notes ? '<div class="notes">' + esc(it.notes) + '</div>' : '') + linksHTML(it);
+}
+
+function viewSignin() {
+  var names = state.people.map(function (p) {
+    var on = ui.selName === p.name;
+    return '<button type="button" class="name-btn" data-a="pickName" data-v="' + esc(p.name) + '" aria-pressed="' + on + '">' +
+      '<span class="avatar' + (on ? ' on' : '') + '">' + (on ? ICON.check : initial(p.name)) + '</span>' + esc(p.name) + '</button>';
+  }).join('');
+  var sel = ui.selName ? getPerson(ui.selName) : null;
+  var pinHelp = sel ? (!sel.hasPin ? 'First time here, ' + esc(sel.name) + '? Pick 4 digits. You will use them next time.' : 'Enter your 4-digit PIN.') :
+    'Pick your name first.';
+  var addBox = ui.adding
+    ? '<div class="field"><label for="newName">Name</label><input id="newName" class="input" type="text" autocomplete="off" maxlength="30">' +
+      '<div style="display:flex;gap:8px"><button type="button" class="btn primary" data-a="addPerson">Add person</button>' +
+      '<button type="button" class="btn quiet" data-a="toggleAdd">Cancel</button></div></div>'
+    : '<button type="button" class="btn quiet" style="align-self:flex-start;color:var(--accent-text)" data-a="toggleAdd">+ Someone missing? Add a person</button>';
+  return '<main class="content" style="padding-top:48px">' +
+    '<div class="hero"><div class="eyebrow">Berberian-Downs</div><h1 style="font-size:40px">Christmas<br>2026</h1>' +
+    '<p style="margin:4px 0 0;color:var(--muted)">Everyone\'s lists in one place. Claim a gift so nobody doubles up. The person it\'s for never sees the claim.</p></div>' +
+    '<div class="field"><div class="lbl">Who\'s looking?</div><div class="names">' + names + '</div>' + addBox + '</div>' +
+    '<div class="field"><label for="pin">Your PIN</label>' +
+    '<input id="pin" class="input" type="password" inputmode="numeric" maxlength="4" autocomplete="off" style="letter-spacing:.4em;font-size:20px">' +
+    '<div class="small muted">' + pinHelp + ' It is just a spoiler guard, not a bank password.</div></div>' +
+    (ui.err ? '<div class="err" role="alert">' + esc(ui.err) + '</div>' : '') +
+    '<div class="spacer"></div><button type="button" class="btn primary block" data-a="signin">Open the lists</button>' +
+    '</main>';
+}
+
+function statusHTML(it) {
+  var me = state.me, mine = it.claims.indexOf(me) > -1;
+  var others = it.claims.filter(function (n) { return n !== me; });
+  var main = '', sub = '';
+  if (it.removed) {
+    return '<div class="row"><span class="pill">Removed by ' + esc(it.owner) + '</span><button type="button" class="btn" data-a="dismiss" data-v="' + it.id + '">Dismiss</button></div>' +
+           '<div class="also">Your plan to get this is cancelled.</div>';
+  }
+  if (mine) {
+    var label = it.mode === 'group' ? "You're in" : it.mode === 'several' ? "You're getting one" : "You're getting this";
+    main = '<span><span class="pill mine">' + ICON.check + label + '</span> <button type="button" class="btn quiet" data-a="unclaim" data-v="' + it.id + '">Undo</button></span>';
+  } else if (canClaim(it)) {
+    var cl = it.mode === 'group' ? (it.claims.length ? 'Join in' : "I'm in on this") : it.mode === 'several' ? "I'll get one" : "I'm getting this";
+    main = '<button type="button" class="btn" data-a="claim" data-v="' + it.id + '">' + cl + '</button>';
+  } else {
+    main = '<span class="pill">' + ICON.user + esc(it.claims[0]) + "'s getting this</span>";
+  }
+  if (others.length && !(it.mode === 'one' && !mine)) {
+    sub = '<div class="also">' + (it.mode === 'group' ? 'Going in together: ' : mine ? 'Also: ' : 'Also getting one: ') + esc(others.join(', ')) + '</div>';
+  }
+  if (!others.length && !mine && it.mode !== 'one') {
+    sub = '<div class="also">' + (it.mode === 'group' ? 'Group gift: more than one person can join.' : 'Several people can each get one.') + '</div>';
+  }
+  var cc = it.comments.length;
+  return '<div class="row">' + main + '<button type="button" class="cbtn" data-a="open" data-v="' + it.id + '" aria-label="' + cc + ' comments. Open item">' + ICON.msg + (cc || '') + '</button></div>' + sub;
+}
+
+function viewLists() {
+  var me = state.me;
+  var others = state.people.filter(function (p) { return p.name !== me; });
+  var sel = (ui.person && others.some(function (p) { return p.name === ui.person; })) ? ui.person : (others[0] ? others[0].name : null);
+  var items = state.items.filter(function (i) { return i.owner === sel && (!i.removed || i.claims.indexOf(me) > -1); });
+  var active = items.filter(function (i) { return !i.removed; });
+  var spoken = active.filter(function (i) { return i.claims.length > 0; }).length;
+  var chips = others.map(function (p) {
+    return '<button type="button" class="chip" data-a="person" data-v="' + esc(p.name) + '" aria-pressed="' + (p.name === sel) + '">' + esc(p.name) + '</button>';
+  }).join('');
+  var cards = items.map(function (it) {
+    return '<article class="card"><button type="button" class="title" data-a="open" data-v="' + it.id + '">' + esc(it.name) + '</button>' +
+      detailsHTML(it) + statusHTML(it) + '</article>';
+  }).join('');
+  if (!items.length) cards = '<div class="panel muted">' + esc(sel) + ' has not added anything yet.</div>';
+  return '<main class="content">' + topbar('Everyone\'s lists') + errBanner() +
+    '<div class="chips" role="group" aria-label="Whose list">' + chips + '</div>' +
+    '<div style="display:flex;justify-content:space-between;align-items:baseline"><h2>' + esc(sel) + '\'s list</h2>' +
+    '<span class="small muted">' + active.length + ' items · ' + spoken + ' spoken for</span></div>' + cards + '</main>' + nav('lists');
+}
+
+function viewDetail() {
+  var it = getItem(ui.itemId), me = state.me;
+  if (!it || it.owner === me) { ui.view = 'lists'; return viewLists(); }
+  var mine = it.claims.indexOf(me) > -1;
+  var who = it.claims.length
+    ? it.claims.map(function (n) { return '<div class="who"><span class="avatar">' + initial(n) + '</span>' + esc(n) + (n === me ? ' (you)' : '') + '</div>'; }).join('')
+    : '<div class="muted small">Nobody yet.</div>';
+  var action = '';
+  if (it.removed) action = '<div class="muted small">' + esc(it.owner) + ' removed this item.</div>';
+  else if (mine) action = '<button type="button" class="btn block" data-a="unclaim" data-v="' + it.id + '">Undo: I\'m not getting this</button>';
+  else if (canClaim(it)) action = '<button type="button" class="btn primary block" data-a="claim" data-v="' + it.id + '">' +
+    (it.mode === 'group' ? (it.claims.length ? 'Join the group gift' : "I'm in on this") : it.mode === 'several' ? "I'll get one too" : "I'm getting this") + '</button>';
+  var seg = MODES.map(function (m) {
+    return '<button type="button" data-a="mode" data-v="' + m.id + '" aria-pressed="' + (it.mode === m.id) + '">' + m.short + '</button>';
+  }).join('');
+  var comments = it.comments.map(function (c) {
+    var reacts = EMOJI.map(function (e) {
+      var who2 = (c.reacts && c.reacts[e]) || [];
+      var on = who2.indexOf(me) > -1;
+      return '<button type="button" class="react" data-a="react" data-v="' + c.id + '|' + e + '" aria-pressed="' + on + '" aria-label="React ' + e + (who2.length ? ', ' + who2.length : '') + '">' + e + (who2.length ? ' ' + who2.length : '') + '</button>';
+    }).join('');
+    return '<div class="comment"><div class="meta">' + esc(c.by) + ' <span>· ' + esc(fmtTime(c.at)) + '</span></div><p>' + esc(c.text) + '</p><div class="reacts">' + reacts + '</div></div>';
+  }).join('');
+  return '<main class="content">' +
+    '<button type="button" class="back" data-a="back">' + ICON.back + esc(it.owner) + '\'s list</button>' +
+    '<div class="hero"><div class="eyebrow">Item</div><h1>' + esc(it.name) + '</h1></div>' +
+    '<div class="card">' + detailsHTML(it) + '</div>' +
+    '<div class="panel"><h2>Who\'s getting this</h2>' + who +
+    '<div class="field"><div class="lbl small muted">How this item works</div><div class="seg" role="group" aria-label="How this item works">' + seg + '</div></div>' +
+    (ui.err ? '<div class="err" role="alert">' + esc(ui.err) + '</div>' : '') + action + '</div>' +
+    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><h2>Comments</h2><span class="small muted" style="display:inline-flex;align-items:center;gap:4px">' + ICON.lock + esc(it.owner) + ' can\'t see these</span></div>' +
+    (comments || '<div class="muted small">No comments yet. Use this to say which one you picked.</div>') +
+    '<div style="display:flex;gap:8px"><label for="cmt" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Add a comment</label>' +
+    '<input id="cmt" class="input" type="text" placeholder="Add a comment…" autocomplete="off" style="flex:1;min-width:0">' +
+    '<button type="button" class="btn primary" style="border-radius:12px;min-height:48px" data-a="post">Post</button></div></main>';
+}
+
+function viewMyList() {
+  var me = state.me;
+  var mine = state.items.filter(function (i) { return i.owner === me && !i.removed; });
+  var rows = mine.map(function (it) {
+    var tag = it.mode === 'several' ? ' · several people can get this' : it.mode === 'group' ? ' · group gift OK' : '';
+    return '<button type="button" class="card" style="text-align:left;width:100%" data-a="edit" data-v="' + it.id + '">' +
+      '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><span style="font-size:16px;font-weight:600">' + esc(it.name) + '</span>' +
+      '<span class="small muted" style="flex:0 0 auto">' + esc(it.price) + '</span></div>' +
+      (it.specs ? '<div class="small muted" style="white-space:pre-line">' + esc(it.specs) + '</div>' : '') +
+      (tag ? '<div class="small muted">' + esc(tag.slice(3)) + '</div>' : '') + '</button>';
+  }).join('');
+  if (!mine.length) rows = '<div class="panel muted">Your list is empty. Add the first item.</div>';
+  return '<main class="content">' + topbar('My list') + errBanner() +
+    '<div class="banner">' + ICON.eyeoff + '<div>Surprise protected. Claims and comments on your items are hidden from you. Everyone else sees them.</div></div>' +
+    '<div class="small muted">' + mine.length + ' items · tap one to edit</div>' +
+    '<button type="button" class="btn primary block" data-a="new">' + ICON.plus + 'Add item</button>' + rows + '</main>' + nav('mylist');
+}
+
+function viewEdit() {
+  var f = ui.form;
+  var modeOpts = MODES.map(function (m) { return '<option value="' + m.id + '"' + (f.mode === m.id ? ' selected' : '') + '>' + m.long + '</option>'; }).join('');
+  var links = f.links.map(function (l, i) {
+    return '<div class="linkrow"><label class="sr" for="l-label-' + i + '" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Link ' + (i + 1) + ' label</label>' +
+      '<input id="l-label-' + i + '" class="input" type="text" placeholder="Label" value="' + esc(l.label) + '">' +
+      '<label for="l-url-' + i + '" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Link ' + (i + 1) + ' address</label>' +
+      '<input id="l-url-' + i + '" class="input" type="text" inputmode="url" placeholder="https://…" value="' + esc(l.url) + '">' +
+      '<button type="button" class="btn quiet" data-a="rmLink" data-v="' + i + '" aria-label="Remove link ' + (i + 1) + '">✕</button></div>';
+  }).join('');
+  var removeBtn = f.id
+    ? '<div style="display:flex;flex-direction:column;align-items:center;gap:2px"><button type="button" class="btn danger" data-a="remove">' + (ui.confirmRemove ? 'Tap again to remove' : 'Remove this item') + '</button>' +
+      '<div class="small muted" style="text-align:center">Anyone planning to get it will see it was removed.</div></div>'
+    : '';
+  return '<main class="content">' +
+    '<button type="button" class="back" data-a="cancelEdit">' + ICON.back + 'My list</button>' +
+    '<h1>' + (f.id ? 'Edit item' : 'Add item') + '</h1>' +
+    '<div class="field"><label for="f-name">Item</label><input id="f-name" class="input" type="text" value="' + esc(f.name) + '" maxlength="120"></div>' +
+    '<div class="field"><label for="f-specs">Specs <span class="muted" style="font-weight:400">(size, color, model…)</span></label><textarea id="f-specs" class="input" rows="2" maxlength="600">' + esc(f.specs) + '</textarea></div>' +
+    '<div class="field"><label for="f-price">Price</label><input id="f-price" class="input" type="text" value="' + esc(f.price) + '" maxlength="60"></div>' +
+    '<div class="field"><div class="lbl">Links</div>' + links + '<button type="button" class="btn quiet" style="align-self:flex-start;color:var(--accent-text)" data-a="addLink">+ Add a link</button></div>' +
+    '<div class="field"><label for="f-notes">Notes <span class="muted" style="font-weight:400">(optional)</span></label><textarea id="f-notes" class="input" rows="3" maxlength="800" placeholder="Sale timing, backups, anything useful">' + esc(f.notes) + '</textarea></div>' +
+    '<div class="field"><label for="f-mode">Who can get this?</label><select id="f-mode" class="input">' + modeOpts + '</select>' +
+    '<div class="small muted">Pick "several" for things like CDs or Lego, where more than one person can each get you one.</div></div>' +
+    (ui.err ? '<div class="err" role="alert">' + esc(ui.err) + '</div>' : '') +
+    '<button type="button" class="btn primary block" data-a="saveItem">Save</button>' + removeBtn + '</main>';
+}
+
+function html() {
+  if (!state.me && ui.view !== 'signin') ui.view = 'signin';
+  switch (ui.view) {
+    case 'lists': return viewLists();
+    case 'detail': return viewDetail();
+    case 'mylist': return viewMyList();
+    case 'edit': return viewEdit();
+    default: return viewSignin();
+  }
+}
+
+function render() {
+  var app = document.getElementById('app');
+  app.innerHTML = html();
+}
+function go(view) { ui.view = view; ui.err = ''; ui.menu = false; ui.confirmRemove = false; render(); try { window.scrollTo(0, 0); } catch (e) {} }
+
+/* ---------- form helpers ---------- */
+function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+function syncForm() {
+  var f = ui.form; if (!f) return;
+  f.name = val('f-name'); f.specs = val('f-specs'); f.price = val('f-price'); f.notes = val('f-notes');
+  var m = val('f-mode'); if (m) f.mode = m;
+  f.links = f.links.map(function (l, i) { return { label: val('l-label-' + i), url: val('l-url-' + i) }; });
+}
+function newForm() { return { id: null, name: '', specs: '', price: '', notes: '', mode: 'one', links: [{ label: '', url: '' }] }; }
+
+/* ---------- server calls ---------- */
+async function call(action, data) {
+  var res = await fetch('/api', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+    body: JSON.stringify(Object.assign({ action: action }, data || {}))
+  });
+  var j = {};
+  try { j = await res.json(); } catch (e) {}
+  if (!res.ok) { var err = new Error(j.error || ('Something went wrong (' + res.status + ').')); err.status = res.status; throw err; }
+  return j;
+}
+function applyData(d) {
+  if (d.me !== undefined) state.me = d.me;
+  if (d.people) state.people = d.people.map(function (p) { return typeof p === 'string' ? { name: p, hasPin: true } : p; });
+  if (d.items) state.items = d.items;
+}
+function setBusy(on) {
+  busy = on;
+  var a = document.getElementById('app');
+  if (a && a.style) { a.style.opacity = on ? '0.7' : ''; a.setAttribute('aria-busy', on ? 'true' : 'false'); }
+}
+async function toSignin(msg) {
+  state.me = null; state.items = []; ui.selName = null; ui.menu = false; ui.form = null;
+  try { applyData(await call('people')); } catch (e) { msg = msg || e.message; }
+  ui.view = 'signin'; ui.err = msg || ''; render();
+}
+// Runs one server action and updates local data. Returns true on success.
+async function mut(action, data) {
+  if (busy) return false;
+  ui.err = ''; setBusy(true);
+  try { applyData(await call(action, data)); setBusy(false); return true; }
+  catch (e) {
+    setBusy(false);
+    if (e.status === 401 && state.me) { await toSignin('Your session ended. Sign in again.'); return false; }
+    ui.err = e.message;
+    if (state.me) { try { applyData(await call('bootstrap')); } catch (e2) {} }
+    return false;
+  }
+}
+
+/* ---------- actions ---------- */
+async function act(a, v) {
+  var me = state.me, it;
+  switch (a) {
+    case 'pickName': ui.selName = v; ui.err = ''; render(); break;
+    case 'toggleAdd': ui.adding = !ui.adding; ui.err = ''; render(); break;
+    case 'addPerson': {
+      var nm = val('newName').trim();
+      if (!nm) { ui.err = 'Type a name first.'; render(); break; }
+      if (await mut('addPerson', { name: nm })) { ui.selName = nm; ui.adding = false; }
+      render(); break;
+    }
+    case 'signin': {
+      var pin = val('pin').trim();
+      if (!ui.selName) { ui.err = 'Pick your name first.'; render(); break; }
+      if (!/^\d{4}$/.test(pin)) { ui.err = 'Enter exactly 4 digits.'; render(); break; }
+      if (await mut('login', { name: ui.selName, pin: pin })) { ui.person = null; go('lists'); } else render();
+      break;
+    }
+    case 'menu': ui.menu = !ui.menu; render(); break;
+    case 'switch':
+      try { await call('logout'); } catch (e) {}
+      await toSignin(''); break;
+    case 'tab': go(v); break;
+    case 'person': ui.person = v; render(); break;
+    case 'open':
+      it = getItem(v); if (!it) break;
+      if (it.owner === me) { act('edit', v); break; }
+      ui.itemId = v; go('detail'); break;
+    case 'back': go('lists'); break;
+    case 'claim': await mut('claim', { itemId: v }); render(); break;
+    case 'unclaim': await mut('unclaim', { itemId: v }); render(); break;
+    case 'dismiss': await mut('dismiss', { itemId: v }); render(); break;
+    case 'mode': await mut('setMode', { itemId: ui.itemId, mode: v }); render(); break;
+    case 'post': {
+      var t = val('cmt').trim(); if (!t) break;
+      await mut('comment', { itemId: ui.itemId, text: t }); render(); break;
+    }
+    case 'react': {
+      var parts = String(v).split('|');
+      await mut('react', { commentId: parts[0], emoji: parts[1] }); render(); break;
+    }
+    case 'new': ui.form = newForm(); go('edit'); break;
+    case 'edit':
+      it = getItem(v); if (!it || it.owner !== me) break;
+      ui.form = { id: it.id, name: it.name, specs: it.specs, price: it.price, notes: it.notes, mode: it.mode,
+        links: it.links.length ? it.links.map(function (l) { return { label: l.label, url: l.url }; }) : [{ label: '', url: '' }] };
+      go('edit'); break;
+    case 'cancelEdit': ui.form = null; go('mylist'); break;
+    case 'addLink': syncForm(); ui.form.links.push({ label: '', url: '' }); render(); break;
+    case 'rmLink': syncForm(); ui.form.links.splice(parseInt(v, 10), 1); if (!ui.form.links.length) ui.form.links.push({ label: '', url: '' }); render(); break;
+    case 'saveItem': {
+      syncForm(); var f = ui.form;
+      if (!f.name.trim()) { ui.err = 'Give the item a name.'; render(); break; }
+      var links = [], bad = false;
+      f.links.forEach(function (l) {
+        if (!l.url.trim() && !l.label.trim()) return;
+        var u = safeUrl(l.url);
+        if (!u) { bad = true; return; }
+        links.push({ label: l.label.trim(), url: u });
+      });
+      if (bad) { ui.err = 'One of the links does not look right. Check the address.'; render(); break; }
+      if (await mut('saveItem', { id: f.id, name: f.name, specs: f.specs, price: f.price, notes: f.notes, mode: f.mode, links: links })) { ui.form = null; go('mylist'); } else render();
+      break;
+    }
+    case 'remove': {
+      if (!ui.confirmRemove) { ui.confirmRemove = true; render(); break; }
+      if (await mut('removeItem', { id: ui.form && ui.form.id })) { ui.form = null; go('mylist'); } else render();
+      break;
+    }
+  }
+}
+
+/* ---------- keep everyone's changes fresh ---------- */
+async function refresh() {
+  if (!state.me || busy || ui.view === 'edit' || ui.menu) return;
+  var a = document.activeElement;
+  if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+  try {
+    var before = JSON.stringify(state.items);
+    applyData(await call('bootstrap'));
+    if (JSON.stringify(state.items) !== before) render();
+  } catch (e) {
+    if (e.status === 401) await toSignin('Your session ended. Sign in again.');
+  }
+}
+
+/* ---------- boot ---------- */
+async function boot() {
+  try { applyData(await call('bootstrap')); ui.view = 'lists'; }
+  catch (e) {
+    if (e.status === 401) { try { applyData(await call('people')); } catch (e2) { ui.err = e2.message; } }
+    else ui.err = e.message;
+    ui.view = 'signin';
+  }
+  render();
+}
+var appEl = document.getElementById('app');
+appEl.addEventListener('click', function (e) {
+  var t = e.target.closest ? e.target.closest('[data-a]') : null;
+  if (!t) { if (ui.menu) { ui.menu = false; render(); } return; }
+  act(t.getAttribute('data-a'), t.getAttribute('data-v')).catch(function (err) { console.error(err); });
+});
+appEl.addEventListener('keydown', function (e) {
+  if (e.key !== 'Enter') return;
+  var id = e.target && e.target.id;
+  if (id === 'pin') act('signin').catch(console.error);
+  else if (id === 'cmt') act('post').catch(console.error);
+  else if (id === 'newName') act('addPerson').catch(console.error);
+});
+setInterval(refresh, 20000);
+document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') refresh(); });
+window.__gt = { html: html, act: act, state: function () { return state; }, ui: ui, boot: boot, refresh: refresh };
+boot();
+})();
+</script>
+</body>
+</html>
