@@ -7,6 +7,7 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<script defer src="/_vercel/insights/script.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
@@ -115,6 +116,35 @@ textarea.input { resize: vertical; line-height: 1.4; }
 .hero { display: flex; flex-direction: column; gap: 8px; }
 .eyebrow { font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .spacer { flex: 1; }
+/* reorder */
+.mrow { display: flex; align-items: stretch; gap: 6px; }
+.mrow .card { flex: 1; min-width: 0; text-align: left; }
+.rank { flex: 0 0 auto; align-self: center; width: 22px; text-align: center; font-size: 13px; font-weight: 600; color: var(--muted); }
+.grip { flex: 0 0 auto; width: 44px; border: none; background: none; color: var(--muted); border-radius: 12px; touch-action: none; cursor: grab; display: flex; align-items: center; justify-content: center; }
+.grip:hover { background: var(--chip); }
+.mrow.dragging { position: relative; z-index: 4; opacity: .96; }
+.mrow.dragging .card { box-shadow: 0 10px 28px rgba(0,0,0,.22); border-color: var(--accent); }
+.mrow.dragging .grip { cursor: grabbing; }
+body.is-dragging { user-select: none; -webkit-user-select: none; }
+.cards { display: flex; flex-direction: column; gap: 14px; }
+.split-body { display: flex; flex-direction: column; gap: 14px; }
+.sort-note { font-size: 13px; color: var(--muted); margin-top: -6px; }
+/* desktop / laptop layout */
+@media (min-width: 900px) {
+  #app { max-width: 1080px; }
+  .content { padding: 28px 36px 40px; gap: 18px; }
+  .content.narrow { max-width: 680px; width: 100%; margin: 0 auto; }
+  .nav { order: -1; position: sticky; top: 0; z-index: 6; bottom: auto; justify-content: flex-start; gap: 6px; padding: 8px 32px; border-top: none; border-bottom: 1px solid var(--line); }
+  .nav button { flex: 0 0 auto; flex-direction: row; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 22px; font-size: 15px; }
+  .nav button[aria-current="page"] { background: var(--tint); }
+  .split-body { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 32px; align-items: start; }
+  .split-body .chips { flex-direction: column; overflow: visible; position: sticky; top: 76px; }
+  .split-body .chip { width: 100%; text-align: left; border-radius: 14px; }
+  .cards.wide { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .menu { right: 0; }
+  .names { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .btn:hover, .chip:hover, .name-btn:hover, .react:hover { filter: brightness(0.97); }
+}
 </style>
 </head>
 <body>
@@ -133,6 +163,13 @@ var MODES = [
 var ui = { view: 'signin', selName: null, err: '', person: null, itemId: null, form: null, menu: false, adding: false, confirmRemove: false };
 var state = { me: null, people: [], items: [] };
 var busy = false;
+var dragging = false;
+function devInfo() {
+  var mobile = false, standalone = false;
+  try { mobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent); } catch (e) {}
+  try { standalone = !!(navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)); } catch (e) {}
+  return { mobile: mobile, standalone: standalone };
+}
 
 /* ---------- icons ---------- */
 var ICON = {
@@ -217,7 +254,7 @@ function viewSignin() {
       '<div style="display:flex;gap:8px"><button type="button" class="btn primary" data-a="addPerson">Add person</button>' +
       '<button type="button" class="btn quiet" data-a="toggleAdd">Cancel</button></div></div>'
     : '<button type="button" class="btn quiet" style="align-self:flex-start;color:var(--accent-text)" data-a="toggleAdd">+ Someone missing? Add a person</button>';
-  return '<main class="content" style="padding-top:48px">' +
+  return '<main class="content narrow" style="padding-top:48px">' +
     '<div class="hero"><div class="eyebrow">Berberian-Downs</div><h1 style="font-size:40px">Christmas<br>2026</h1>' +
     '<p style="margin:4px 0 0;color:var(--muted)">Everyone\'s lists in one place. Claim a gift so nobody doubles up. The person it\'s for never sees the claim.</p></div>' +
     '<div class="field"><div class="lbl">Who\'s looking?</div><div class="names">' + names + '</div>' + addBox + '</div>' +
@@ -272,9 +309,12 @@ function viewLists() {
   }).join('');
   if (!items.length) cards = '<div class="panel muted">' + esc(sel) + ' has not added anything yet.</div>';
   return '<main class="content">' + topbar('Everyone\'s lists') + errBanner() +
-    '<div class="chips" role="group" aria-label="Whose list">' + chips + '</div>' +
-    '<div style="display:flex;justify-content:space-between;align-items:baseline"><h2>' + esc(sel) + '\'s list</h2>' +
-    '<span class="small muted">' + active.length + ' items · ' + spoken + ' spoken for</span></div>' + cards + '</main>' + nav('lists');
+    '<div class="split-body"><div class="chips" role="group" aria-label="Whose list">' + chips + '</div>' +
+    '<section style="display:flex;flex-direction:column;gap:14px;min-width:0">' +
+    '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><h2>' + esc(sel) + '\'s list</h2>' +
+    '<span class="small muted">' + active.length + ' items · ' + spoken + ' spoken for</span></div>' +
+    (active.length > 1 ? '<div class="sort-note">Top of the list is what ' + esc(sel) + ' wants most, if they\'ve sorted it.</div>' : '') +
+    '<div class="cards wide">' + cards + '</div></section></div></main>' + nav('lists');
 }
 
 function viewDetail() {
@@ -300,7 +340,7 @@ function viewDetail() {
     }).join('');
     return '<div class="comment"><div class="meta">' + esc(c.by) + ' <span>· ' + esc(fmtTime(c.at)) + '</span></div><p>' + esc(c.text) + '</p><div class="reacts">' + reacts + '</div></div>';
   }).join('');
-  return '<main class="content">' +
+  return '<main class="content narrow">' +
     '<button type="button" class="back" data-a="back">' + ICON.back + esc(it.owner) + '\'s list</button>' +
     '<div class="hero"><div class="eyebrow">Item</div><h1>' + esc(it.name) + '</h1></div>' +
     '<div class="card">' + detailsHTML(it) + '</div>' +
@@ -314,22 +354,25 @@ function viewDetail() {
     '<button type="button" class="btn primary" style="border-radius:12px;min-height:48px" data-a="post">Post</button></div></main>';
 }
 
+var GRIP = '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="currentColor"><circle cx="6.5" cy="4" r="1.5"/><circle cx="11.5" cy="4" r="1.5"/><circle cx="6.5" cy="9" r="1.5"/><circle cx="11.5" cy="9" r="1.5"/><circle cx="6.5" cy="14" r="1.5"/><circle cx="11.5" cy="14" r="1.5"/></svg>';
 function viewMyList() {
   var me = state.me;
   var mine = state.items.filter(function (i) { return i.owner === me && !i.removed; });
-  var rows = mine.map(function (it) {
+  var rows = mine.map(function (it, idx) {
     var tag = it.mode === 'several' ? ' · several people can get this' : it.mode === 'group' ? ' · group gift OK' : '';
-    return '<button type="button" class="card" style="text-align:left;width:100%" data-a="edit" data-v="' + it.id + '">' +
+    return '<div class="mrow" data-row="' + it.id + '"><button type="button" class="grip" data-grip="' + it.id + '" aria-label="Reorder ' + esc(it.name) + '. Drag, or press the up and down arrow keys." title="Drag to reorder">' + GRIP + '</button>' +
+      '<span class="rank" aria-hidden="true">' + (idx + 1) + '</span>' +
+      '<button type="button" class="card" data-a="edit" data-v="' + it.id + '">' +
       '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><span style="font-size:16px;font-weight:600">' + esc(it.name) + '</span>' +
       '<span class="small muted" style="flex:0 0 auto">' + esc(it.price) + '</span></div>' +
       (it.specs ? '<div class="small muted" style="white-space:pre-line">' + esc(it.specs) + '</div>' : '') +
-      (tag ? '<div class="small muted">' + esc(tag.slice(3)) + '</div>' : '') + '</button>';
+      (tag ? '<div class="small muted">' + esc(tag.slice(3)) + '</div>' : '') + '</button></div>';
   }).join('');
   if (!mine.length) rows = '<div class="panel muted">Your list is empty. Add the first item.</div>';
-  return '<main class="content">' + topbar('My list') + errBanner() +
+  return '<main class="content narrow">' + topbar('My list') + errBanner() +
     '<div class="banner">' + ICON.eyeoff + '<div>Surprise protected. Claims and comments on your items are hidden from you. Everyone else sees them.</div></div>' +
-    '<div class="small muted">' + mine.length + ' items · tap one to edit</div>' +
-    '<button type="button" class="btn primary block" data-a="new">' + ICON.plus + 'Add item</button>' + rows + '</main>' + nav('mylist');
+    '<div class="small muted">' + mine.length + ' items · tap one to edit' + (mine.length > 1 ? ' · drag ⠿ to put what you want most at the top. Everyone sees this order.' : '') + '</div>' +
+    '<button type="button" class="btn primary block" data-a="new">' + ICON.plus + 'Add item</button><div class="cards" id="mine">' + rows + '</div></main>' + nav('mylist');
 }
 
 function viewEdit() {
@@ -346,7 +389,7 @@ function viewEdit() {
     ? '<div style="display:flex;flex-direction:column;align-items:center;gap:2px"><button type="button" class="btn danger" data-a="remove">' + (ui.confirmRemove ? 'Tap again to remove' : 'Remove this item') + '</button>' +
       '<div class="small muted" style="text-align:center">Anyone planning to get it will see it was removed.</div></div>'
     : '';
-  return '<main class="content">' +
+  return '<main class="content narrow">' +
     '<button type="button" class="back" data-a="cancelEdit">' + ICON.back + 'My list</button>' +
     '<h1>' + (f.id ? 'Edit item' : 'Add item') + '</h1>' +
     '<div class="field"><label for="f-name">Item</label><input id="f-name" class="input" type="text" value="' + esc(f.name) + '" maxlength="120"></div>' +
@@ -443,7 +486,7 @@ async function act(a, v) {
       var pin = val('pin').trim();
       if (!ui.selName) { ui.err = 'Pick your name first.'; render(); break; }
       if (!/^\d{4}$/.test(pin)) { ui.err = 'Enter exactly 4 digits.'; render(); break; }
-      if (await mut('login', { name: ui.selName, pin: pin })) { ui.person = null; go('lists'); } else render();
+      if (await mut('login', { name: ui.selName, pin: pin, dev: devInfo() })) { ui.person = null; go('lists'); } else render();
       break;
     }
     case 'menu': ui.menu = !ui.menu; render(); break;
@@ -468,6 +511,13 @@ async function act(a, v) {
     case 'react': {
       var parts = String(v).split('|');
       await mut('react', { commentId: parts[0], emoji: parts[1] }); render(); break;
+    }
+    case 'nudge': {
+      var np = String(v).split('|');
+      var ids = mineIds(), at = ids.indexOf(np[0]), to = at + parseInt(np[1], 10);
+      if (at < 0 || to < 0 || to >= ids.length) break;
+      ids.splice(to, 0, ids.splice(at, 1)[0]);
+      await commitOrder(ids); render(); focusGrip(np[0]); break;
     }
     case 'new': ui.form = newForm(); go('edit'); break;
     case 'edit':
@@ -500,9 +550,66 @@ async function act(a, v) {
   }
 }
 
+/* ---------- reorder my list ---------- */
+function mineIds() {
+  return state.items.filter(function (i) { return i.owner === state.me && !i.removed; }).map(function (i) { return i.id; });
+}
+// Shows the new order right away, then saves it. If saving fails, mut() reloads the real order.
+async function commitOrder(ids) {
+  var mine = {};
+  state.items.forEach(function (i) { if (i.owner === state.me && !i.removed) mine[i.id] = i; });
+  var rest = state.items.filter(function (i) { return !(i.owner === state.me && !i.removed); });
+  state.items = rest.concat(ids.map(function (id) { return mine[id]; }).filter(Boolean));
+  return mut('reorder', { ids: ids });
+}
+function focusGrip(id) {
+  try { var g = document.querySelector('[data-grip="' + id + '"]'); if (g) g.focus(); } catch (e) {}
+}
+// Pointer drag: the grabbed row follows the finger/mouse, other rows slide aside as it passes them.
+function startDrag(grip, e) {
+  var list = document.getElementById('mine'), row = grip.closest('.mrow');
+  if (!list || !row || dragging || busy) return;
+  e.preventDefault();
+  dragging = true;
+  var rect0 = row.getBoundingClientRect(), grab = e.clientY - rect0.top, lastY = e.clientY, raf = 0;
+  row.classList.add('dragging'); document.body.classList.add('is-dragging');
+  try { grip.setPointerCapture(e.pointerId); } catch (x) {}
+  function place() {
+    row.style.transform = '';
+    var rows = Array.prototype.slice.call(list.children).filter(function (r) { return r !== row; });
+    var before = null;
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i].getBoundingClientRect();
+      if (lastY < r.top + r.height / 2) { before = rows[i]; break; }
+    }
+    if (before !== row.nextSibling) list.insertBefore(row, before);
+    var now = row.getBoundingClientRect();
+    row.style.transform = 'translateY(' + Math.round(lastY - grab - now.top) + 'px)';
+  }
+  function tick() {
+    if (!dragging) return;
+    var h = window.innerHeight, edge = 70;
+    if (lastY < edge) window.scrollBy(0, -Math.ceil((edge - lastY) / 5));
+    else if (lastY > h - edge) window.scrollBy(0, Math.ceil((lastY - (h - edge)) / 5));
+    place(); raf = requestAnimationFrame(tick);
+  }
+  function move(ev) { lastY = ev.clientY; }
+  function end(ev) {
+    dragging = false; cancelAnimationFrame(raf);
+    grip.removeEventListener('pointermove', move); grip.removeEventListener('pointerup', end); grip.removeEventListener('pointercancel', end);
+    document.body.classList.remove('is-dragging');
+    var ids = Array.prototype.slice.call(list.children).map(function (r) { return r.getAttribute('data-row'); }).filter(Boolean);
+    var changed = ids.join() !== mineIds().join();
+    row.style.transform = ''; row.classList.remove('dragging');
+    if (changed && ev.type !== 'pointercancel') commitOrder(ids).then(function () { render(); }); else render();
+  }
+  grip.addEventListener('pointermove', move); grip.addEventListener('pointerup', end); grip.addEventListener('pointercancel', end);
+  raf = requestAnimationFrame(tick);
+}
+
 /* ---------- keep everyone's changes fresh ---------- */
 async function refresh() {
-  if (!state.me || busy || ui.view === 'edit' || ui.menu) return;
+  if (!state.me || busy || dragging || ui.view === 'edit' || ui.menu) return;
   var a = document.activeElement;
   if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
   try {
@@ -516,7 +623,7 @@ async function refresh() {
 
 /* ---------- boot ---------- */
 async function boot() {
-  try { applyData(await call('bootstrap')); ui.view = 'lists'; }
+  try { applyData(await call('bootstrap', { open: true, dev: devInfo() })); ui.view = 'lists'; }
   catch (e) {
     if (e.status === 401) { try { applyData(await call('people')); } catch (e2) { ui.err = e2.message; } }
     else ui.err = e.message;
@@ -530,7 +637,14 @@ appEl.addEventListener('click', function (e) {
   if (!t) { if (ui.menu) { ui.menu = false; render(); } return; }
   act(t.getAttribute('data-a'), t.getAttribute('data-v')).catch(function (err) { console.error(err); });
 });
+appEl.addEventListener('pointerdown', function (e) {
+  if (e.button > 0) return;
+  var g = e.target.closest ? e.target.closest('[data-grip]') : null;
+  if (g) startDrag(g, e);
+});
 appEl.addEventListener('keydown', function (e) {
+  var g = e.target && e.target.getAttribute && e.target.getAttribute('data-grip');
+  if (g && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) { e.preventDefault(); act('nudge', g + '|' + (e.key === 'ArrowUp' ? -1 : 1)).catch(console.error); return; }
   if (e.key !== 'Enter') return;
   var id = e.target && e.target.id;
   if (id === 'pin') act('signin').catch(console.error);
@@ -539,7 +653,7 @@ appEl.addEventListener('keydown', function (e) {
 });
 setInterval(refresh, 20000);
 document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') refresh(); });
-window.__gt = { html: html, act: act, state: function () { return state; }, ui: ui, boot: boot, refresh: refresh };
+window.__gt = { commitOrder: commitOrder, mineIds: mineIds, html: html, act: act, state: function () { return state; }, ui: ui, boot: boot, refresh: refresh };
 boot();
 })();
 </script>

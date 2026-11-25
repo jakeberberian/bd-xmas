@@ -7,6 +7,7 @@ create table people (
   pin_hash text,
   fails int not null default 0,
   locked_until timestamptz,
+  last_seen timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -46,6 +47,17 @@ create table reactions (
   primary key (comment_id, person, emoji)
 );
 
+create table events (
+  id bigint generated always as identity primary key,
+  at timestamptz not null default now(),
+  type text not null,
+  person text,
+  details jsonb not null default '{}',
+  version text
+);
+create index events_type_at_idx on events(type, at desc);
+create index events_person_at_idx on events(person, at desc);
+
 create index items_owner_idx on items(owner);
 create index claims_item_idx on claims(item_id);
 create index comments_item_idx on comments(item_id);
@@ -57,6 +69,7 @@ alter table items enable row level security;
 alter table claims enable row level security;
 alter table comments enable row level security;
 alter table reactions enable row level security;
+alter table events enable row level security;
 
 -- Let the server (secret key, role service_role) use the tables.
 grant usage on schema public to service_role;

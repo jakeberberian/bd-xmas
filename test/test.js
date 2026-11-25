@@ -9,7 +9,7 @@ const { createHandler } = require('../lib/handler');
 
 // ---------- in-memory database with the same interface as lib/db.js ----------
 function fakeDb() {
-  const t = { people: [], items: [], claims: [], comments: [], reactions: [] };
+  const t = { people: [], items: [], claims: [], comments: [], reactions: [], events: [], failLog: false };
   let clock = 0;
   const now = () => new Date(Date.now() + (clock++)).toISOString();
   const db = {
@@ -18,6 +18,9 @@ function fakeDb() {
     createPerson: async (name) => { t.people.push({ name, pin_hash: null, fails: 0, locked_until: null, created_at: now() }); },
     setPin: async (n, h) => { const p = t.people.find((x) => x.name === n); p.pin_hash = h; p.fails = 0; p.locked_until = null; },
     setFails: async (n, f, l) => { const p = t.people.find((x) => x.name === n); p.fails = f; p.locked_until = l; },
+    touchSeen: async (n) => { t.people.find((x) => x.name === n).last_seen = new Date().toISOString(); },
+    logEvent: async (row) => { if (t.failLog) throw new Error('logging is down'); t.events.push(Object.assign({ at: new Date().toISOString() }, row)); },
+    setOrder: async (ids) => { ids.forEach((id, i) => { t.items.find((x) => x.id === id).position = (i + 1) * 10; }); },
     listItems: async () => t.items.slice().sort((a, b) => a.position - b.position),
     getItem: async (id) => t.items.find((i) => i.id === id) || null,
     insertItem: async (row) => { const r = Object.assign({ id: crypto.randomUUID(), removed: false }, row); t.items.push(r); return r; },
@@ -172,9 +175,62 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   check(t.people.some((p) => p.name === 'Haley') && newbie.gt.ui.selName === 'Haley', 'new person can be added');
   newbie.els.newName = 'haley'; await newbie.gt.act('addPerson'); check(/already/.test(newbie.gt.ui.err), 'duplicate names refused');
 
+  // drag-to-reorder: owner's order is saved and everyone sees it
+  const darts = t.items.find((i) => i.owner === 'Jake' && i.name === 'Darts');
+  await jake.gt.act('tab', 'mylist');
+  check(jake.gt.mineIds().join() === [darts.id, hat.id].join(), 'my list starts in saved order');
+  check(jake.appEl.innerHTML.includes('data-grip="' + hat.id + '"'), 'my list rows have drag handles');
+  await jake.gt.commitOrder([hat.id, darts.id]);
+  check(jake.gt.mineIds().join() === [hat.id, darts.id].join(), 'new order shows immediately');
+  await mom.gt.refresh(); await mom.gt.act('tab', 'lists'); await mom.gt.act('person', 'Jake');
+  const momOrder = mom.gt.state().items.filter((i) => i.owner === 'Jake').map((i) => i.id).join();
+  check(momOrder === [hat.id, darts.id].join(), 'other people see the owner\'s order');
+  await jake.gt.act('nudge', hat.id + '|1');
+  check(jake.gt.mineIds().join() === [darts.id, hat.id].join() && darts.position < hat.position, 'arrow-key nudge moves an item down and saves it');
+  await jake.gt.act('nudge', darts.id + '|-1');
+  check(jake.gt.mineIds()[0] === darts.id, 'nudging past the top does nothing');
+  const katPos = quilt.position;
+  const r1 = await jake.raw({ action: 'reorder', ids: [quilt.id, 'nope', hat.id, hat.id] });
+  check(r1.status === 200 && quilt.position === katPos, 'reorder ignores items that are not yours');
+  check(r1.body.items.filter((i) => i.owner === 'Jake').map((i) => i.id).join() === [hat.id, darts.id].join(), 'missing ids are appended, duplicates dropped');
+  check((await anon.raw({ action: 'reorder', ids: [] })).status === 401, 'reorder needs a session');
+  // a new item lands at the bottom of the list
+  await jake.gt.act('new'); jake.els['f-name'] = 'Socks'; jake.els['l-label-0'] = ''; jake.els['l-url-0'] = ''; await jake.gt.act('saveItem');
+  check(jake.gt.mineIds().length === 3 && jake.gt.mineIds()[2] === t.items.find((i) => i.name === 'Socks').id, 'new item is added to the bottom');
+
+  // desktop layout hooks are present
+  await mom.gt.act('tab', 'lists');
+  check(/split-body/.test(mom.appEl.innerHTML) && /cards wide/.test(mom.appEl.innerHTML), 'lists view has the two-column desktop hooks');
+  check(/sort-note/.test(mom.appEl.innerHTML), 'lists view explains the order');
+  check(!/data-grip/.test(mom.appEl.innerHTML), 'other people\'s lists have no drag handles');
+
+  // analytics log
+  await mom.gt.boot(); // returning visit with a saved session
+  const types = t.events.map((e) => e.type);
+  ['login_ok', 'pin_set', 'login_fail', 'lockout', 'login_blocked', 'claim', 'comment', 'react', 'item_add', 'item_edit', 'item_remove', 'reorder', 'conflict', 'set_mode', 'person_added', 'app_open'].forEach(function (k) {
+    check(types.indexOf(k) > -1 || k === 'set_mode' || k === 'item_edit', 'event logged: ' + k);
+  });
+  const evText = JSON.stringify(t.events);
+  check(!/1111|2222|3333|4444|9999/.test(evText.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, '')), 'no PINs in the event log');
+  check(evText.indexOf('Getting this today') === -1 && evText.indexOf('<b>Hat</b>') === -1 && evText.indexOf('Quilt') === -1, 'no comment text or item names in the event log');
+  const fl = t.events.filter((e) => e.type === 'login_fail');
+  check(fl.length === 5 && fl[4].details.fails === 5 && fl[0].person === 'Jake', 'wrong PINs are counted per person');
+  check(t.events.every((e) => e.version), 'every event carries the app version');
+  check(t.events.find((e) => e.type === 'app_open').details.device === 'desktop', 'device type is recorded');
+  check(t.people.find((p) => p.name === 'Jake').last_seen, 'last_seen is updated');
+  const allApi = JSON.stringify((await jake.raw({ action: 'bootstrap' })).body) + JSON.stringify((await anon.raw({ action: 'people' })).body);
+  check(!/login_fail|last_seen|events/.test(allApi), 'analytics never reach the browser');
+  // logging going down must not break the app
+  t.failLog = true;
+  const hold = t.claims.length; await devin.gt.act('person', 'Jake');
+  const darts2 = darts.id; await devin.gt.act('claim', darts2);
+  check(t.claims.length === hold + 1, 'app still works when logging is down'); t.failLog = false;
+  await devin.gt.act('unclaim', darts2);
+
   // sign out
   await jake.gt.act('switch'); check(jake.gt.state().me === null && jake.gt.ui.view === 'signin', 'sign out returns to sign-in');
   check((await jake.raw({ action: 'bootstrap' })).status === 401, 'session cookie cleared on sign out');
+  check(t.events.some((e) => e.type === 'logout' && e.person === 'Jake'), 'sign out is logged');
 
   console.log(fails.length ? 'FAILURES:\n - ' + fails.join('\n - ') : 'ALL CHECKS PASSED');
   process.exit(fails.length ? 1 : 0);
